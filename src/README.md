@@ -1,9 +1,11 @@
-# src
+# 源码模块
 
-实现代码将放在此目录。
-
-规划模块（实现时再落文件，避免空壳乱拆）：
-
-- 路径与清单（备份包含哪些源）
-- 拷贝/恢复执行（含跳过规则、OLD 回退）
-- GUI 入口
+| 模块 | 职责 |
+|------|------|
+| `paths.py` | 本机路径与备份目录命名 |
+| `process_check.py` | 检测 Cursor 进程 |
+| `sizing.py` | 体积估算与格式化 |
+| `transfer.py` | robocopy / 文件拷贝与 OLD_* 挪移 |
+| `backup.py` | 备份计划与执行 |
+| `restore.py` | 恢复校验与执行 |
+| `gui_app.py` | tkinter 界面 |
