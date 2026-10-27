@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.backup import BackupOptions, STATE_DB_BACKUP, build_plan  # noqa: E402
+from src.backup_index import describe_backup  # noqa: E402
 from src.paths import CursorPaths, new_backup_dir_name  # noqa: E402
 from src.restore import validate_backup_dir  # noqa: E402
 from src.sizing import format_bytes  # noqa: E402
@@ -73,6 +74,19 @@ class SelfCheck(unittest.TestCase):
             plan = build_plan(paths, opts)
             gs_item = next(i for i in plan if i.key == "globalStorage")
             self.assertEqual(gs_item.estimated_bytes, 100)
+
+    def test_describe_backup_reads_meta(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "cursor-sessions_20261027_181254"
+            root.mkdir()
+            (root / "backup-meta.json").write_text(
+                '{"total_bytes": 1024, "cursor_version": "3.27.12", "items": ["globalStorage"]}',
+                encoding="utf-8",
+            )
+            entry = describe_backup(root)
+            self.assertEqual(entry.display_time, "2026-10-27 18:12:54")
+            self.assertEqual(entry.cursor_version, "3.27.12")
+            self.assertEqual(entry.size_bytes, 1024)
 
 
 if __name__ == "__main__":

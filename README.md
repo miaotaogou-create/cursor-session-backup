@@ -6,9 +6,11 @@
 
 ## 功能
 
-- **备份**：将会话相关目录保存到备份根目录（默认 `C:\ZYL\backup\cursor-sessions_<时间戳>`）
-- **恢复**：从已有备份覆盖回本机（恢复前须完全退出 Cursor；覆盖前挪到 `OLD_*` 以便回退）
-- **安全提示**：检测 Cursor 进程、预估体积；默认跳过巨型 `state.vscdb.backup`
+- **一键备份全部对话**：保存到备份根目录（默认 `C:\ZYL\backup\cursor-sessions_<时间戳>`）
+- **历史列表选择恢复**：按时间/体积/版本列出备份，点选后一键恢复或删除
+- **自动关停与重启**：恢复前可自动关闭 Cursor，成功后可选自动再启动
+- **安全**：覆盖前挪到 `OLD_*`；默认跳过巨型 `state.vscdb.backup`
+- **不做**：换号、重置机器码等无关能力
 
 需求与验收标准见 [`docs/requirements/20261027-cursor-session-backup.md`](docs/requirements/20261027-cursor-session-backup.md)。
 

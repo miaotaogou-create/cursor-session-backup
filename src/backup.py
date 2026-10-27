@@ -245,6 +245,9 @@ def _write_manifest(
     result: BackupResult,
     now: datetime,
 ) -> None:
+    from .cursor_install import read_cursor_version
+
+    cursor_version = read_cursor_version()
     data = {
         "schema": 1,
         "tool": "cursor-session-backup",
@@ -253,6 +256,7 @@ def _write_manifest(
         "items": result.items,
         "warnings": result.warnings,
         "total_bytes": result.total_bytes,
+        "cursor_version": cursor_version,
         "options": {
             "include_settings": options.include_settings,
             "include_keybindings": options.include_keybindings,
@@ -270,4 +274,17 @@ def _write_manifest(
     }
     (backup_dir / "manifest.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (backup_dir / "backup-meta.json").write_text(
+        json.dumps(
+            {
+                "created_at": now.isoformat(timespec="seconds"),
+                "total_bytes": result.total_bytes,
+                "cursor_version": cursor_version,
+                "items": result.items,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
     )

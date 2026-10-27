@@ -1,16 +1,21 @@
-"""检测 Cursor 相关进程是否仍在运行。"""
+"""检测 / 关闭 / 启动 Cursor 进程。"""
 
 from __future__ import annotations
 
 import subprocess
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
+from .cursor_install import find_cursor_exe
 
 # Windows 任务管理器里常见的进程名（不含 .exe 后缀，tasklist 对照用）
 CURSOR_PROCESS_NAMES = (
     "Cursor",
     "cursor",
 )
+
+_CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
 
 
 @dataclass(frozen=True)
@@ -29,7 +34,7 @@ def list_cursor_processes() -> list[ProcessHit]:
             encoding="utf-8",
             errors="replace",
             check=False,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+            creationflags=_CREATE_NO_WINDOW,
         )
     except OSError:
         return []
@@ -53,3 +58,30 @@ def list_cursor_processes() -> list[ProcessHit]:
 
 def cursor_is_running() -> bool:
     return bool(list_cursor_processes())
+
+
+def close_cursor_processes(*, wait_seconds: float = 8.0) -> list[ProcessHit]:
+    """请求结束 Cursor 进程；返回仍残留的进程（空列表表示已退出）。"""
+    hits = list_cursor_processes()
+    for hit in hits:
+        subprocess.run(
+            ["taskkill", "/PID", hit.pid, "/T", "/F"],
+            capture_output=True,
+            check=False,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        if not cursor_is_running():
+            return []
+        time.sleep(0.4)
+    return list_cursor_processes()
+
+
+def launch_cursor(exe: Path | None = None) -> Path:
+    target = exe or find_cursor_exe()
+    if target is None or not target.is_file():
+        raise FileNotFoundError("未找到 Cursor.exe，请手动启动")
+    # 启动 GUI 程序不要带 CREATE_NO_WINDOW，否则窗口可能起不来
+    subprocess.Popen([str(target)], cwd=str(target.parent))
+    return target
