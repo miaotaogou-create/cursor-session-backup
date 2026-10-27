@@ -17,18 +17,28 @@
 - Windows 10/11
 - Python 3.10+（仅用标准库 + 系统自带 `robocopy` / `tasklist`）
 
-## 启动
+## 便携版（推荐）
+
+已打好的无安装包：
+
+`release\CursorSessionBackup.exe`（约 12MB，依赖已打进单文件，**无终端黑框**）
+
+双击即可；或运行 `启动便携版.bat`。
+
+重新打包：
 
 ```bat
-cd C:\ZYL\tools\cursor-session-backup
+pip install pyinstaller
+python build_portable.py
+```
+
+## 开发启动
+
+```bat
 run_gui.bat
 ```
 
-或：
-
-```bat
-python run_gui.py
-```
+（优先启动 `release\CursorSessionBackup.exe`；否则用 `pythonw` 以免弹出控制台）
 
 ## 备份包含什么（默认）
 

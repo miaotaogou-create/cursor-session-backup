@@ -61,7 +61,7 @@
 
 - [ ] 公开仓库默认显示名 / 简介文案是否还要改（当前：`cursor-session-backup`）
 - [ ] 是否需要附带「导出可读聊天索引 JSON」（旧脚本有 `export-cursor-chats.py`）——首版可后置
-- [ ] 是否做便携绿色版（PyInstaller 单文件）——首版可后置
+- [x] 便携绿色版（PyInstaller 单文件、`console=False` 无黑框）——已提供 `release/CursorSessionBackup.exe`
 
 ## 建议下一手
 

@@ -16,5 +16,7 @@ env/
 Thumbs.db
 dist/
 build/
+*.spec.bak
+release/*.exe
 *.zip
 *.7z
