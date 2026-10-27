@@ -16,7 +16,8 @@
 ## 环境
 
 - Windows 10/11
-- Python 3.10+（仅用标准库 + 系统自带 `robocopy` / `tasklist`）
+- 便携 exe：无需本机 Python
+- 从源码跑：Python 3.10+，`pip install -r requirements.txt`（界面用 customtkinter；拷贝仍用系统 `robocopy` / `tasklist`）
 
 ## 便携版（推荐）
 

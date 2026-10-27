@@ -1,4 +1,4 @@
-"""极简界面：一键备份 + 历史列表（一键恢复 / 删除）。"""
+"""现代化极简界面：一键备份 + 历史卡片（一键恢复 / 删除）。"""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ import threading
 import traceback
 from pathlib import Path
 
-import tkinter as tk
-from tkinter import messagebox, ttk
+import customtkinter as ctk
+from tkinter import messagebox
 
 from . import __version__
-from .backup import BackupOptions, estimate_total, build_plan, run_backup
-from .backup_index import delete_backup_dir, list_backup_entries
+from .backup import BackupOptions, build_plan, estimate_total, run_backup
+from .backup_index import BackupEntry, delete_backup_dir, list_backup_entries
 from .cursor_install import find_cursor_install_dir, read_cursor_version
 from .paths import DEFAULT_BACKUP_ROOT, CursorPaths
 from .process_check import (
@@ -24,9 +24,18 @@ from .process_check import (
 from .restore import RestoreOptions, run_restore, validate_backup_dir
 from .sizing import format_bytes
 
+# 浅色、克制的强调色（避免常见「紫渐变」套路）
+ACCENT = "#0F766E"
+ACCENT_HOVER = "#0D9488"
+DANGER = "#B91C1C"
+DANGER_HOVER = "#DC2626"
+SURFACE = "#F4F6F8"
+CARD = "#FFFFFF"
+TEXT = "#0F172A"
+MUTED = "#64748B"
+
 
 def _default_options(backup_root: Path) -> BackupOptions:
-    # 固定合理默认：会话 + 编辑器配置；不带规则笔记；跳过巨型 .backup
     return BackupOptions(
         backup_root=backup_root,
         include_settings=True,
@@ -45,78 +54,136 @@ def _default_restore(backup_dir: Path) -> RestoreOptions:
     )
 
 
-class SessionBackupApp(tk.Tk):
+class SessionBackupApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("green")
+
         self.title(f"Cursor 会话备份  v{__version__}")
-        self.geometry("760x560")
-        self.minsize(700, 480)
+        self.geometry("820x640")
+        self.minsize(760, 560)
+        self.configure(fg_color=SURFACE)
 
         self.paths = CursorPaths.resolve()
         self.backup_root = DEFAULT_BACKUP_ROOT
         self._worker: threading.Thread | None = None
-        self._path_by_iid: dict[str, Path] = {}
-
-        self.status_var = tk.StringVar(value="")
-        self.hint_var = tk.StringVar(value="")
-        self.list_summary_var = tk.StringVar(value="历史对话备份：0 份")
+        self._cards: list[ctk.CTkFrame] = []
 
         self._build()
         self.refresh_status()
         self.refresh_list()
-        self.after(100, self._warm_estimate)
+        self.after(120, self._warm_estimate)
 
     def _build(self) -> None:
-        root = ttk.Frame(self, padding=16)
-        root.pack(fill=tk.BOTH, expand=True)
+        pad = {"padx": 24, "pady": (18, 0)}
 
-        ttk.Label(root, textvariable=self.status_var).pack(anchor="w")
-        ttk.Label(root, textvariable=self.hint_var, foreground="#555").pack(anchor="w", pady=(2, 12))
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", **pad)
+        ctk.CTkLabel(
+            header,
+            text="Cursor 会话备份",
+            font=ctk.CTkFont(family="Segoe UI Semibold", size=22),
+            text_color=TEXT,
+        ).pack(anchor="w")
+        self.status_label = ctk.CTkLabel(
+            header,
+            text="",
+            font=ctk.CTkFont(family="Segoe UI", size=13),
+            text_color=MUTED,
+            anchor="w",
+            justify="left",
+        )
+        self.status_label.pack(anchor="w", pady=(6, 0))
+        self.path_label = ctk.CTkLabel(
+            header,
+            text="",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color=MUTED,
+            anchor="w",
+        )
+        self.path_label.pack(anchor="w", pady=(2, 0))
 
-        bar = ttk.Frame(root)
-        bar.pack(fill=tk.X, pady=(0, 10))
-        ttk.Button(bar, text="一键备份全部对话", command=self.on_backup).pack(side=tk.LEFT)
-        ttk.Button(bar, text="打开备份文件夹", command=self.open_backup_root).pack(side=tk.LEFT, padx=8)
-        ttk.Button(bar, text="刷新", command=self._refresh_all).pack(side=tk.RIGHT)
+        actions = ctk.CTkFrame(self, fg_color="transparent")
+        actions.pack(fill="x", padx=24, pady=(16, 8))
+        ctk.CTkButton(
+            actions,
+            text="一键备份全部对话",
+            height=42,
+            corner_radius=10,
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            font=ctk.CTkFont(family="Segoe UI Semibold", size=14),
+            command=self.on_backup,
+        ).pack(side="left")
+        ctk.CTkButton(
+            actions,
+            text="打开备份文件夹",
+            height=42,
+            width=130,
+            corner_radius=10,
+            fg_color="#E2E8F0",
+            hover_color="#CBD5E1",
+            text_color=TEXT,
+            font=ctk.CTkFont(family="Segoe UI", size=13),
+            command=self.open_backup_root,
+        ).pack(side="left", padx=(10, 0))
+        ctk.CTkButton(
+            actions,
+            text="刷新",
+            height=42,
+            width=80,
+            corner_radius=10,
+            fg_color="#E2E8F0",
+            hover_color="#CBD5E1",
+            text_color=TEXT,
+            command=self._refresh_all,
+        ).pack(side="right")
 
-        box = ttk.LabelFrame(root, text="历史对话备份", padding=10)
-        box.pack(fill=tk.BOTH, expand=True)
+        list_head = ctk.CTkFrame(self, fg_color="transparent")
+        list_head.pack(fill="x", padx=24, pady=(8, 4))
+        self.list_title = ctk.CTkLabel(
+            list_head,
+            text="历史对话备份 · 0 份",
+            font=ctk.CTkFont(family="Segoe UI Semibold", size=15),
+            text_color=TEXT,
+        )
+        self.list_title.pack(side="left")
+        ctk.CTkLabel(
+            list_head,
+            text="每条可删除或一键恢复",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color=MUTED,
+        ).pack(side="right")
 
-        head = ttk.Frame(box)
-        head.pack(fill=tk.X)
-        ttk.Label(head, textvariable=self.list_summary_var).pack(side=tk.LEFT)
-        ttk.Label(
-            head,
-            text="选中后可删除或一键恢复；恢复会先关闭 Cursor，并把当前数据挪到 OLD_*。",
-            foreground="#666",
-        ).pack(side=tk.RIGHT)
+        self.list_host = ctk.CTkScrollableFrame(
+            self,
+            fg_color=SURFACE,
+            corner_radius=0,
+        )
+        self.list_host.pack(fill="both", expand=True, padx=18, pady=(0, 8))
 
-        cols = ("time", "size", "version")
-        tree = ttk.Treeview(box, columns=cols, show="headings", height=12, selectmode="browse")
-        tree.heading("time", text="备份时间")
-        tree.heading("size", text="体积")
-        tree.heading("version", text="Cursor 版本")
-        tree.column("time", width=180, anchor="w")
-        tree.column("size", width=100, anchor="center")
-        tree.column("version", width=120, anchor="center")
-        scroll = ttk.Scrollbar(box, orient=tk.VERTICAL, command=tree.yview)
-        tree.configure(yscrollcommand=scroll.set)
-        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, pady=(8, 8))
-        scroll.pack(side=tk.RIGHT, fill=tk.Y, pady=(8, 8))
-        self.tree = tree
-        tree.bind("<Double-1>", lambda _e: self.on_restore())
-
-        btns = ttk.Frame(box)
-        btns.pack(fill=tk.X)
-        ttk.Button(btns, text="一键恢复", command=self.on_restore).pack(side=tk.LEFT)
-        ttk.Button(btns, text="删除", command=self.on_delete).pack(side=tk.LEFT, padx=8)
-
-        self.log = tk.Text(root, height=8, wrap=tk.WORD)
-        self.log.pack(fill=tk.BOTH, expand=False, pady=(10, 0))
+        log_wrap = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12, border_width=1, border_color="#E2E8F0")
+        log_wrap.pack(fill="x", padx=24, pady=(0, 20))
+        ctk.CTkLabel(
+            log_wrap,
+            text="运行日志",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color=MUTED,
+        ).pack(anchor="w", padx=14, pady=(10, 0))
+        self.log = ctk.CTkTextbox(
+            log_wrap,
+            height=110,
+            font=ctk.CTkFont(family="Consolas", size=12),
+            fg_color=CARD,
+            text_color=TEXT,
+            border_width=0,
+        )
+        self.log.pack(fill="x", padx=8, pady=(4, 10))
 
     def _log(self, msg: str) -> None:
-        self.log.insert(tk.END, msg + "\n")
-        self.log.see(tk.END)
+        self.log.insert("end", msg + "\n")
+        self.log.see("end")
 
     def _busy(self) -> bool:
         return self._worker is not None and self._worker.is_alive()
@@ -129,41 +196,110 @@ class SessionBackupApp(tk.Tk):
         install = find_cursor_install_dir()
         ver = read_cursor_version(install)
         if install:
-            ver_s = f" · v{ver}" if ver else ""
-            base = f"已安装{ver_s}  {install}"
+            ver_s = f"  v{ver}" if ver else ""
+            line1 = f"已安装{ver_s}    {install}"
         else:
-            base = "未检测到安装目录（仍可备份/恢复本机会话数据）"
+            line1 = "未检测到安装目录（仍可备份 / 恢复本机会话）"
         if cursor_is_running():
             hits = list_cursor_processes()
-            run = "运行中 " + "/".join(h.pid for h in hits[:3])
+            line1 += f"    ·  运行中（{len(hits)} 个进程）"
         else:
-            run = "未运行"
-        self.status_var.set(f"{base}    |    Cursor：{run}")
-        self.hint_var.set(f"备份位置：{self.backup_root}")
+            line1 += "    ·  当前未运行"
+        self.status_label.configure(text=line1)
+        self.path_label.configure(text=f"备份目录  {self.backup_root}")
 
     def refresh_list(self) -> None:
-        for iid in self.tree.get_children():
-            self.tree.delete(iid)
-        self._path_by_iid.clear()
+        for card in self._cards:
+            card.destroy()
+        self._cards.clear()
+
         entries = list_backup_entries(self.backup_root, compute_size_if_missing=False)
-        self.list_summary_var.set(f"历史对话备份：{len(entries)} 份")
-        for entry in entries:
-            iid = self.tree.insert(
-                "",
-                tk.END,
-                values=(entry.display_time, entry.size_label, entry.cursor_version or "-"),
+        self.list_title.configure(text=f"历史对话备份 · {len(entries)} 份")
+
+        if not entries:
+            empty = ctk.CTkFrame(
+                self.list_host,
+                fg_color=CARD,
+                corner_radius=12,
+                border_width=1,
+                border_color="#E2E8F0",
+                height=88,
             )
-            self._path_by_iid[iid] = entry.path
-        kids = self.tree.get_children()
-        if kids:
-            self.tree.selection_set(kids[0])
-            self.tree.focus(kids[0])
+            empty.pack(fill="x", padx=6, pady=6)
+            ctk.CTkLabel(
+                empty,
+                text="还没有备份。点上方「一键备份全部对话」开始。",
+                font=ctk.CTkFont(family="Segoe UI", size=13),
+                text_color=MUTED,
+            ).pack(pady=28)
+            self._cards.append(empty)
+            return
+
+        for entry in entries:
+            self._cards.append(self._make_card(entry))
+
+    def _make_card(self, entry: BackupEntry) -> ctk.CTkFrame:
+        card = ctk.CTkFrame(
+            self.list_host,
+            fg_color=CARD,
+            corner_radius=12,
+            border_width=1,
+            border_color="#E2E8F0",
+        )
+        card.pack(fill="x", padx=6, pady=6)
+
+        left = ctk.CTkFrame(card, fg_color="transparent")
+        left.pack(side="left", fill="both", expand=True, padx=16, pady=14)
+        ctk.CTkLabel(
+            left,
+            text=entry.display_time,
+            font=ctk.CTkFont(family="Segoe UI Semibold", size=15),
+            text_color=TEXT,
+            anchor="w",
+        ).pack(anchor="w")
+        meta = f"{entry.size_label}"
+        if entry.cursor_version:
+            meta += f"    ·    Cursor {entry.cursor_version}"
+        ctk.CTkLabel(
+            left,
+            text=meta,
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color=MUTED,
+            anchor="w",
+        ).pack(anchor="w", pady=(4, 0))
+
+        right = ctk.CTkFrame(card, fg_color="transparent")
+        right.pack(side="right", padx=14, pady=14)
+        ctk.CTkButton(
+            right,
+            text="删除",
+            width=72,
+            height=34,
+            corner_radius=8,
+            fg_color="#FEE2E2",
+            hover_color="#FECACA",
+            text_color=DANGER,
+            font=ctk.CTkFont(family="Segoe UI", size=13),
+            command=lambda p=entry.path: self.on_delete(p),
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            right,
+            text="一键恢复",
+            width=100,
+            height=34,
+            corner_radius=8,
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            font=ctk.CTkFont(family="Segoe UI Semibold", size=13),
+            command=lambda p=entry.path: self.on_restore(p),
+        ).pack(side="left")
+        return card
 
     def _warm_estimate(self) -> None:
         def work() -> None:
             try:
                 total = estimate_total(build_plan(self.paths, _default_options(self.backup_root)))
-                self.after(0, lambda: self._log(f"预计备份体积约 {format_bytes(total)}（首次估算）"))
+                self.after(0, lambda: self._log(f"预计备份约 {format_bytes(total)}"))
             except Exception as exc:  # noqa: BLE001
                 self.after(0, lambda: self._log(f"体积估算跳过: {exc}"))
 
@@ -173,12 +309,6 @@ class SessionBackupApp(tk.Tk):
         self.backup_root.mkdir(parents=True, exist_ok=True)
         os.startfile(self.backup_root)  # noqa: S606
 
-    def _selected(self) -> Path | None:
-        sel = self.tree.selection()
-        if not sel:
-            return None
-        return self._path_by_iid.get(sel[0])
-
     def on_backup(self) -> None:
         if self._busy():
             return
@@ -186,6 +316,7 @@ class SessionBackupApp(tk.Tk):
         if not messagebox.askyesno(
             "一键备份",
             f"备份全部对话到：\n{self.backup_root}\\cursor-sessions_<时间戳>\n\n是否开始？",
+            parent=self,
         ):
             return
         self._log("—— 开始备份 ——")
@@ -210,31 +341,27 @@ class SessionBackupApp(tk.Tk):
         self.refresh_list()
         if error:
             self._log("备份失败:\n" + "".join(traceback.format_exception_only(type(error), error)))
-            messagebox.showerror("备份失败", str(error))
+            messagebox.showerror("备份失败", str(error), parent=self)
             return
         assert backup_dir is not None
         self._log(f"备份成功: {backup_dir}")
-        messagebox.showinfo("备份成功", f"已保存：\n{backup_dir}")
+        messagebox.showinfo("备份成功", f"已保存：\n{backup_dir}", parent=self)
 
-    def on_restore(self) -> None:
+    def on_restore(self, path: Path) -> None:
         if self._busy():
-            return
-        path = self._selected()
-        if path is None:
-            messagebox.showwarning("提示", "请先在列表里选中一份备份")
             return
         problems = validate_backup_dir(path)
         if problems:
-            messagebox.showerror("备份无效", "\n".join(problems))
+            messagebox.showerror("备份无效", "\n".join(problems), parent=self)
             return
         running = cursor_is_running()
         msg = (
-            f"将恢复这份备份：\n{path.name}\n\n"
+            f"将恢复：{path.name}\n\n"
             "会先关闭 Cursor，把当前数据挪到 OLD_*，再写入备份，最后自动重新打开 Cursor。\n是否继续？"
         )
         if running:
             msg = "检测到 Cursor 正在运行。\n\n" + msg
-        if not messagebox.askyesno("一键恢复", msg):
+        if not messagebox.askyesno("一键恢复", msg, parent=self):
             return
         self._log("—— 开始恢复 ——")
         opts = _default_restore(path)
@@ -268,7 +395,7 @@ class SessionBackupApp(tk.Tk):
         self.refresh_status()
         if error:
             self._log("恢复失败:\n" + "".join(traceback.format_exception_only(type(error), error)))
-            messagebox.showerror("恢复失败", str(error))
+            messagebox.showerror("恢复失败", str(error), parent=self)
             return
         aside = "\n".join(result.aside_paths[:6]) if result.aside_paths else "(无)"
         messagebox.showinfo(
@@ -278,23 +405,24 @@ class SessionBackupApp(tk.Tk):
             + "\n\n回退副本：\n"
             + aside
             + "\n\n请用原来的工程路径打开项目。",
+            parent=self,
         )
 
-    def on_delete(self) -> None:
+    def on_delete(self, path: Path) -> None:
         if self._busy():
             return
-        path = self._selected()
-        if path is None:
-            messagebox.showwarning("提示", "请先选中要删除的备份")
-            return
-        if not messagebox.askyesno("删除备份", f"确定删除？\n{path.name}\n\n删除后无法找回。"):
+        if not messagebox.askyesno(
+            "删除备份",
+            f"确定删除？\n{path.name}\n\n删除后无法找回。",
+            parent=self,
+        ):
             return
         try:
             delete_backup_dir(path)
             self._log(f"已删除：{path}")
             self.refresh_list()
         except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("删除失败", str(exc))
+            messagebox.showerror("删除失败", str(exc), parent=self)
 
 
 def main() -> None:
