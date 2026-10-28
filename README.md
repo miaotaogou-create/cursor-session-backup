@@ -23,7 +23,7 @@
 
 真正的**单文件 exe**（带应用图标，换电脑也可双击运行，无终端黑框、无需 bat）。
 
-**下载发布包**：GitHub Releases → [v0.6.2](https://github.com/miaotaogou-create/cursor-session-backup/releases/tag/v0.6.2)（附件 `CursorSessionBackup.exe`）。
+**下载发布包**：GitHub Releases → [v0.6.3](https://github.com/miaotaogou-create/cursor-session-backup/releases/tag/v0.6.3)（附件 `CursorSessionBackup.exe`）。
 
 本机构建产物路径：`release\CursorSessionBackup.exe`。直接双击即可；首次启动会稍慢（自解压）。目标机需已装 WebView2（Win11 一般自带）。
 
