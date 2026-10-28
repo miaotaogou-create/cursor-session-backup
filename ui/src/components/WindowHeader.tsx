@@ -10,7 +10,10 @@ interface WindowHeaderProps {
   onClose?: () => void;
 }
 
+/** 统一点击区旁的描边图标基准尺寸（14px） */
 const ICON = 'w-3.5 h-3.5';
+/** Lucide Square/Copy 在 viewBox 内占位比 X 大（约 18 vs 12），略缩小以光学对齐 */
+const ICON_BOX = 'w-3 h-3';
 
 export const WindowHeader: React.FC<WindowHeaderProps> = ({
   version,
@@ -73,9 +76,9 @@ export const WindowHeader: React.FC<WindowHeaderProps> = ({
           onClick={onMaximize}
         >
           {isMaximized ? (
-            <Copy className={ICON} strokeWidth={2} />
+            <Copy className={ICON_BOX} strokeWidth={2} />
           ) : (
-            <Square className={ICON} strokeWidth={2} />
+            <Square className={ICON_BOX} strokeWidth={2} />
           )}
         </button>
         <button
