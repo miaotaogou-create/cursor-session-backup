@@ -239,22 +239,23 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-200/70 p-3 sm:p-4 md:p-5 flex items-center justify-center font-sans antialiased">
+    // 桌面无边框窗口：铺满客户区，不要网页式「居中卡片+四周灰边」
+    <div className="h-screen w-screen overflow-hidden bg-slate-50 flex flex-col font-sans antialiased">
       {toastMessage && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-60 bg-slate-900/90 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg border border-slate-700/80 flex items-center gap-2">
           <span>{toastMessage}</span>
         </div>
       )}
 
-      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl shadow-slate-400/20 border border-slate-300/80 overflow-hidden flex flex-col transition-all">
-        <WindowHeader
-          version={appVersion}
-          onMinimize={() => void getApi()?.window_minimize()}
-          onMaximize={() => void getApi()?.window_toggle_maximize()}
-          onClose={() => void getApi()?.window_close()}
-        />
+      <WindowHeader
+        version={appVersion}
+        onMinimize={() => void getApi()?.window_minimize()}
+        onMaximize={() => void getApi()?.window_toggle_maximize()}
+        onClose={() => void getApi()?.window_close()}
+      />
 
-        <div className="p-5 sm:p-7 space-y-6 bg-slate-50/50">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="p-5 sm:p-7 space-y-6 bg-slate-50">
           <StatusBanner
             systemInfo={systemInfo}
             onEditBackupDir={() => {

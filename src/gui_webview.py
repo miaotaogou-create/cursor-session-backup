@@ -36,7 +36,7 @@ def main() -> None:
         width=960,
         height=820,
         min_size=(840, 680),
-        background_color="#F1F5F9",
+        background_color="#F8FAFC",
         frameless=True,
         easy_drag=False,
     )

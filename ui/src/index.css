@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #f8fafc; /* slate-50，不透明，避免 WebView 边缘透出异常色 */
+  }
   body {
     /* 便携离线：用本机字体，不依赖外网 Google Fonts */
     font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
