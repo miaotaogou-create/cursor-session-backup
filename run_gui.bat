@@ -1,8 +1,7 @@
 @echo off
 cd /d "%~dp0"
-REM 开发用：pythonw 无黑框；若已有便携 exe 则优先启动 exe
-if exist "%~dp0release\CursorSessionBackup.exe" (
-  start "" "%~dp0release\CursorSessionBackup.exe"
+if exist "%~dp0release\CursorSessionBackup\CursorSessionBackup.exe" (
+  start "" "%~dp0release\CursorSessionBackup\CursorSessionBackup.exe"
   exit /b 0
 )
 where pythonw >nul 2>&1

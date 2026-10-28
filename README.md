@@ -21,16 +21,16 @@
 
 ## 便携版（推荐）
 
-已打好的无安装包：
+已打好的无安装目录（**目录模式**，可靠捆绑 Tcl/Tk，无终端黑框）：
 
-`release\CursorSessionBackup.exe`（约 12MB，依赖已打进单文件，**无终端黑框**）
+`release\CursorSessionBackup\CursorSessionBackup.exe`
 
-双击即可；或运行 `启动便携版.bat`。
+桌面快捷方式或 `启动便携版.bat` 均可启动。
 
 重新打包：
 
 ```bat
-pip install pyinstaller
+pip install -r requirements.txt pyinstaller
 python build_portable.py
 ```
 
