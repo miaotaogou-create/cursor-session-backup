@@ -12,8 +12,8 @@ interface WindowHeaderProps {
 
 /** 统一点击区旁的描边图标基准尺寸（14px） */
 const ICON = 'w-3.5 h-3.5';
-/** Lucide Square/Copy 在 viewBox 内占位比 X 大（约 18 vs 12），略缩小以光学对齐 */
-const ICON_BOX = 'w-3 h-3';
+/** Lucide Square/Copy 在 viewBox 内占位比 X 大（约 18 vs 12）；12px 仍偏大，用 10px 对齐 X 视觉跨度 */
+const ICON_BOX = 'w-2.5 h-2.5';
 
 export const WindowHeader: React.FC<WindowHeaderProps> = ({
   version,
