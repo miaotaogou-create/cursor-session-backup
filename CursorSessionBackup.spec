@@ -12,6 +12,10 @@ ui_dist = Path("ui") / "dist"
 if not (ui_dist / "index.html").is_file():
     raise SystemExit("缺少 ui/dist：请先在 ui 目录执行 npm run build")
 
+icon_path = Path("assets") / "app.ico"
+if not icon_path.is_file():
+    raise SystemExit("缺少 assets/app.ico：请先执行 python assets/generate_icon.py")
+
 a = Analysis(
     ["run_gui.py"],
     pathex=["."],
@@ -46,4 +50,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(icon_path),
 )

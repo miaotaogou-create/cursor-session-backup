@@ -21,21 +21,23 @@
 
 ## 便携版（推荐）
 
-真正的**单文件 exe**（换电脑也可双击运行，无终端黑框）：
+真正的**单文件 exe**（带应用图标，换电脑也可双击运行，无终端黑框、无需 bat）：
 
 `release\CursorSessionBackup.exe`
 
-桌面快捷方式或 `启动便携版.bat` 均可启动。首次启动会稍慢（自解压）。
+直接双击该 exe 即可；首次启动会稍慢（自解压）。目标机需已装 WebView2（Win11 一般自带）。
 
 重新打包：
 
 ```bat
 pip install -r requirements.txt pyinstaller
+pip install pillow
+python assets\generate_icon.py
 npm --prefix ui install
 python build_portable.py
 ```
 
-（`build_portable.py` 会先 `npm run build` 再打 exe。）
+（`build_portable.py` 会先 `npm run build` 再打 exe；`assets\app.ico` 会嵌进 exe。）
 
 ## 开发启动
 
@@ -47,7 +49,7 @@ npm --prefix ui run build
 pythonw run_gui.py
 ```
 
-或直接双击已打好的 `release\CursorSessionBackup.exe`。
+日常使用请双击 `release\CursorSessionBackup.exe`，不要依赖 `run_gui.bat`。
 
 仅改 UI 时可 `npm --prefix ui run dev` 在浏览器预览（无桌面桥接时不会真正备份）。
 

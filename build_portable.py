@@ -71,10 +71,12 @@ def main() -> int:
     shutil.copy2(DIST_EXE, OUT_EXE)
     size_mb = OUT_EXE.stat().st_size / (1024 * 1024)
     print(f"OK: {OUT_EXE} ({size_mb:.1f} MB)")
-
+    # 保留 bat 仅作兼容；日常请直接双击 exe
     launcher = RELEASE / "启动Cursor会话备份.bat"
     launcher.write_text(
-        '@echo off\r\nstart "" "%~dp0CursorSessionBackup.exe"\r\n',
+        '@echo off\r\n'
+        'rem 推荐直接双击 CursorSessionBackup.exe；本 bat 仅兼容旧快捷方式\r\n'
+        'start "" "%~dp0CursorSessionBackup.exe"\r\n',
         encoding="utf-8",
     )
     return 0
