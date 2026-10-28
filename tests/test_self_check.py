@@ -79,6 +79,9 @@ class SelfCheck(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "cursor-sessions_20261027_181254"
             root.mkdir()
+            gs = root / "globalStorage"
+            gs.mkdir()
+            (gs / "state.vscdb").write_bytes(b"db")
             (root / "backup-meta.json").write_text(
                 '{"total_bytes": 1024, "cursor_version": "3.27.12", "items": ["globalStorage"]}',
                 encoding="utf-8",
@@ -87,6 +90,32 @@ class SelfCheck(unittest.TestCase):
             self.assertEqual(entry.display_time, "2026-10-27 18:12:54")
             self.assertEqual(entry.cursor_version, "3.27.12")
             self.assertEqual(entry.size_bytes, 1024)
+            self.assertTrue(entry.usable)
+
+    def test_delete_clears_readonly(self) -> None:
+        import os
+        import stat
+
+        from src.backup_index import delete_backup_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "cursor-sessions_20261027_120000"
+            nested = root / "globalStorage"
+            nested.mkdir(parents=True)
+            fp = nested / "storage.json"
+            fp.write_text("{}", encoding="utf-8")
+            os.chmod(fp, stat.S_IREAD)
+            delete_backup_dir(root)
+            self.assertFalse(root.exists())
+
+    def test_legacy_layout_validate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "cursor-sessions_20261026_094955"
+            gs = root / "AppData_Roaming_Cursor_User" / "globalStorage"
+            gs.mkdir(parents=True)
+            (gs / "storage.json").write_text("{}", encoding="utf-8")
+            problems = validate_backup_dir(root)
+            self.assertTrue(any("state.vscdb" in p for p in problems))
 
 
 if __name__ == "__main__":

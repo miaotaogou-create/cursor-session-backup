@@ -6,11 +6,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .backup_layout import STATE_DB, backup_has_state_db, resolve_backup_layout
 from .paths import CursorPaths
 from .process_check import cursor_is_running, list_cursor_processes
 from .transfer import ProgressFn, copy_file, copy_tree, move_aside
-
-STATE_DB = "state.vscdb"
 
 
 @dataclass
@@ -34,13 +33,15 @@ def validate_backup_dir(backup_dir: Path) -> list[str]:
     problems: list[str] = []
     if not backup_dir.is_dir():
         return [f"备份目录不存在: {backup_dir}"]
-    gs = backup_dir / "globalStorage"
-    state = gs / STATE_DB
-    if not gs.is_dir():
-        problems.append("备份中缺少 globalStorage/")
-    elif not state.is_file():
-        problems.append("备份中缺少 globalStorage/state.vscdb")
-    # workspace / projects 缺失时警告级，由 run_restore 记 warning
+    layout = resolve_backup_layout(backup_dir)
+    if layout.global_storage is None:
+        problems.append("备份中缺少 globalStorage（含旧版 AppData_Roaming_Cursor_User/globalStorage）")
+        return problems
+    if not backup_has_state_db(layout):
+        problems.append(
+            f"备份不完整：找不到 {STATE_DB}。"
+            "这份旧备份可能只拷了部分文件，无法恢复对话主库。"
+        )
     return problems
 
 
@@ -59,6 +60,7 @@ def run_restore(
     if problems:
         raise RuntimeError("备份校验失败:\n- " + "\n- ".join(problems))
 
+    layout = resolve_backup_layout(options.backup_dir)
     now = now or datetime.now()
     stamp = now.strftime("%Y%m%d_%H%M%S")
     result = RestoreResult()
@@ -67,23 +69,24 @@ def run_restore(
         if progress:
             progress(msg)
 
-    pairs: list[tuple[str, Path, Path, bool]] = [
-        ("globalStorage", options.backup_dir / "globalStorage", paths.global_storage, False),
-        ("workspaceStorage", options.backup_dir / "workspaceStorage", paths.workspace_storage, False),
-        ("dot-cursor-projects", options.backup_dir / "dot-cursor-projects", paths.dot_cursor_projects, False),
+    if layout.legacy:
+        log("检测到旧版备份目录结构，按兼容路径恢复")
+
+    pairs: list[tuple[str, Path | None, Path, bool]] = [
+        ("globalStorage", layout.global_storage, paths.global_storage, False),
+        ("workspaceStorage", layout.workspace_storage, paths.workspace_storage, False),
+        ("dot-cursor-projects", layout.projects, paths.dot_cursor_projects, False),
     ]
     if options.include_settings:
-        pairs.append(("settings.json", options.backup_dir / "settings.json", paths.settings_json, True))
+        pairs.append(("settings.json", layout.settings_json, paths.settings_json, True))
     if options.include_keybindings:
-        pairs.append(
-            ("keybindings.json", options.backup_dir / "keybindings.json", paths.keybindings_json, True)
-        )
+        pairs.append(("keybindings.json", layout.keybindings_json, paths.keybindings_json, True))
     if options.include_rules:
         rules_dst = options.rules_dir or paths.rules_dir
-        pairs.append(("ZYL_dot_cursor", options.backup_dir / "ZYL_dot_cursor", rules_dst, False))
+        pairs.append(("ZYL_dot_cursor", layout.rules_dir, rules_dst, False))
 
     for label, src, dst, is_file in pairs:
-        if not src.exists():
+        if src is None or not src.exists():
             result.warnings.append(f"备份中无此项，跳过: {label}")
             log(result.warnings[-1])
             continue

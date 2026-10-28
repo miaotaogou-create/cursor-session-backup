@@ -238,13 +238,34 @@ class SessionBackupApp(ctk.CTk):
         for entry in entries:
             self._cards.append(self._make_card(entry))
 
+        # 后台补算体积（旧备份没有 manifest 时不再一直「未知」）
+        threading.Thread(target=self._fill_sizes_async, daemon=True).start()
+
+    def _fill_sizes_async(self) -> None:
+        try:
+            entries = list_backup_entries(self.backup_root, compute_size_if_missing=True)
+        except Exception:  # noqa: BLE001
+            return
+        self.after(0, lambda: self._apply_sized_entries(entries))
+
+    def _apply_sized_entries(self, entries: list[BackupEntry]) -> None:
+        if self._busy():
+            return
+        for card in self._cards:
+            card.destroy()
+        self._cards.clear()
+        self.list_title.configure(text=f"历史对话备份 · {len(entries)} 份")
+        for entry in entries:
+            self._cards.append(self._make_card(entry))
+
     def _make_card(self, entry: BackupEntry) -> ctk.CTkFrame:
+        border = "#FECACA" if not entry.usable else "#E2E8F0"
         card = ctk.CTkFrame(
             self.list_host,
             fg_color=CARD,
             corner_radius=12,
             border_width=1,
-            border_color="#E2E8F0",
+            border_color=border,
         )
         card.pack(fill="x", padx=6, pady=6)
 
@@ -267,6 +288,14 @@ class SessionBackupApp(ctk.CTk):
             text_color=MUTED,
             anchor="w",
         ).pack(anchor="w", pady=(4, 0))
+        if entry.note:
+            ctk.CTkLabel(
+                left,
+                text=entry.note,
+                font=ctk.CTkFont(family="Segoe UI", size=12),
+                text_color=DANGER if not entry.usable else MUTED,
+                anchor="w",
+            ).pack(anchor="w", pady=(2, 0))
 
         right = ctk.CTkFrame(card, fg_color="transparent")
         right.pack(side="right", padx=14, pady=14)
@@ -282,17 +311,20 @@ class SessionBackupApp(ctk.CTk):
             font=ctk.CTkFont(family="Segoe UI", size=13),
             command=lambda p=entry.path: self.on_delete(p),
         ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
+        restore_btn = ctk.CTkButton(
             right,
             text="一键恢复",
             width=100,
             height=34,
             corner_radius=8,
-            fg_color=ACCENT,
-            hover_color=ACCENT_HOVER,
+            fg_color=ACCENT if entry.usable else "#94A3B8",
+            hover_color=ACCENT_HOVER if entry.usable else "#94A3B8",
             font=ctk.CTkFont(family="Segoe UI Semibold", size=13),
             command=lambda p=entry.path: self.on_restore(p),
-        ).pack(side="left")
+        )
+        restore_btn.pack(side="left")
+        if not entry.usable:
+            restore_btn.configure(state="disabled")
         return card
 
     def _warm_estimate(self) -> None:
@@ -352,7 +384,11 @@ class SessionBackupApp(ctk.CTk):
             return
         problems = validate_backup_dir(path)
         if problems:
-            messagebox.showerror("备份无效", "\n".join(problems), parent=self)
+            messagebox.showerror(
+                "这份备份不能恢复",
+                "\n".join(problems) + "\n\n建议：用本工具重新「一键备份」一份完整备份。",
+                parent=self,
+            )
             return
         running = cursor_is_running()
         msg = (

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import stat
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .backup_layout import backup_has_state_db, resolve_backup_layout
 from .paths import list_backup_dirs
 from .sizing import dir_size_bytes, format_bytes
 
@@ -23,6 +26,8 @@ class BackupEntry:
     size_bytes: int | None
     cursor_version: str | None
     item_count: int | None
+    usable: bool
+    note: str | None = None
 
 
 def _parse_time_from_name(name: str) -> str | None:
@@ -62,9 +67,20 @@ def describe_backup(path: Path, *, compute_size_if_missing: bool = False) -> Bac
         size_bytes = dir_size_bytes(path)
 
     if size_bytes is None:
-        size_label = "未知"
+        size_label = "计算中…" if compute_size_if_missing is False else "未知"
     else:
         size_label = format_bytes(size_bytes)
+
+    layout = resolve_backup_layout(path)
+    usable = backup_has_state_db(layout)
+    note = None
+    if not usable:
+        if layout.global_storage is None:
+            note = "不完整：缺少会话库目录"
+        else:
+            note = "不完整：缺少 state.vscdb（无法恢复对话）"
+    elif layout.legacy:
+        note = "旧版备份格式"
 
     return BackupEntry(
         path=path,
@@ -73,6 +89,8 @@ def describe_backup(path: Path, *, compute_size_if_missing: bool = False) -> Bac
         size_bytes=size_bytes,
         cursor_version=cursor_version,
         item_count=item_count,
+        usable=usable,
+        note=note,
     )
 
 
@@ -83,9 +101,31 @@ def list_backup_entries(backup_root: Path, *, compute_size_if_missing: bool = Fa
     ]
 
 
+def _clear_readonly(func, path, _exc_info) -> None:
+    # shutil.rmtree onerror：去掉只读后再删
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except OSError:
+        raise
+
+
 def delete_backup_dir(path: Path) -> None:
     if not path.is_dir():
         raise FileNotFoundError(str(path))
     if not path.name.startswith("cursor-sessions_"):
         raise RuntimeError(f"拒绝删除非本工具备份目录: {path}")
-    shutil.rmtree(path)
+
+    # 先批量清只读，再 rmtree
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            fp = Path(root) / name
+            try:
+                if fp.exists() and not os.access(fp, os.W_OK):
+                    os.chmod(fp, stat.S_IWRITE)
+            except OSError:
+                continue
+
+    shutil.rmtree(path, onerror=_clear_readonly)
+    if path.exists():
+        raise RuntimeError(f"删除未完成，目录仍在: {path}")
