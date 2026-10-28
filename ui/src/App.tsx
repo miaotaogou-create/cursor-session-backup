@@ -257,7 +257,7 @@ export default function App() {
     // 桌面无边框窗口：铺满客户区，不要网页式「居中卡片+四周灰边」
     <div className="h-screen w-screen overflow-hidden bg-slate-50 flex flex-col font-sans antialiased">
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-60 max-w-[min(90vw,28rem)] bg-slate-900/90 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg border border-slate-700/80 flex items-center gap-2 pointer-events-none">
+        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-60 max-w-[min(90vw,28rem)] bg-slate-900/90 backdrop-blur-md text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg border border-slate-700/80 flex items-center gap-2 pointer-events-none">
           <span>{toastMessage}</span>
         </div>
       )}
