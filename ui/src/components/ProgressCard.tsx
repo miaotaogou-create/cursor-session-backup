@@ -1,12 +1,18 @@
 import React from 'react';
-import { OperationState } from '../types';
+import { OperationState, OperationType } from '../types';
 import { CheckCircle2, Clock, Loader2, Sparkles } from 'lucide-react';
+
+const TITLE_BY_OP: Record<OperationType, string> = {
+  backup: '备份进度',
+  restore: '恢复进度',
+  delete: '删除进度',
+};
 
 interface ProgressCardProps {
   operationState: OperationState;
   progressPercent: number;
   statusMessage: string;
-  operationType: 'backup' | 'restore';
+  operationType: OperationType;
   elapsedTime?: string;
 }
 
@@ -17,12 +23,13 @@ export const ProgressCard: React.FC<ProgressCardProps> = ({
   operationType,
   elapsedTime = '18.4s',
 }) => {
-  const isBackingUp = operationState === 'backing-up';
-  const isRestoring = operationState === 'restoring';
   const isCompleted = operationState === 'completed';
-  const isBusy = isBackingUp || isRestoring;
+  const isBusy =
+    operationState === 'backing-up' ||
+    operationState === 'restoring' ||
+    operationState === 'deleting';
 
-  const title = operationType === 'restore' ? '恢复进度' : '备份进度';
+  const title = TITLE_BY_OP[operationType] ?? '操作进度';
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">

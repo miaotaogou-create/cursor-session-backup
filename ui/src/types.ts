@@ -16,7 +16,15 @@ export interface LogEntry {
   message: string;
 }
 
-export type OperationState = 'idle' | 'backing-up' | 'restoring' | 'completed' | 'error';
+export type OperationState =
+  | 'idle'
+  | 'backing-up'
+  | 'restoring'
+  | 'deleting'
+  | 'completed'
+  | 'error';
+
+export type OperationType = 'backup' | 'restore' | 'delete';
 
 export interface SystemInfo {
   cursorVersion: string;

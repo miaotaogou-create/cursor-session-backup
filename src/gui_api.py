@@ -393,7 +393,7 @@ class DesktopApi:
         path = Path(backup_path)
         self._busy = True
         self._op_started_at = time.monotonic()
-        self._emit("op", state="backing-up", percent=0, message="正在删除备份...", op="backup")
+        self._emit("op", state="deleting", percent=0, message="正在删除备份...", op="delete")
         self._emit("log", level="info", message=f"—— 开始删除 {path.name} ——")
 
         def work() -> None:
@@ -403,9 +403,9 @@ class DesktopApi:
                     pct = int(round((fraction or 0) * 100)) if fraction is not None else None
                     payload: dict[str, Any] = {
                         "kind": "op",
-                        "state": "backing-up",
+                        "state": "deleting",
                         "message": message,
-                        "op": "backup",
+                        "op": "delete",
                     }
                     if pct is not None:
                         payload["percent"] = pct
@@ -418,13 +418,13 @@ class DesktopApi:
                     state="completed",
                     percent=100,
                     message=f"已删除：{path.name}",
-                    op="backup",
+                    op="delete",
                     elapsed=f"{elapsed:.1f}s",
                 )
                 self._emit("log", level="info", message=f"已删除备份记录: {path.name}")
                 self._emit("toast", message="备份已从列表中删除")
             except Exception as exc:  # noqa: BLE001
-                self._emit("op", state="error", message="删除失败", op="backup")
+                self._emit("op", state="error", message="删除失败", op="delete")
                 self._emit("log", level="error", message=f"删除失败: {exc}")
                 self._emit("toast", message=f"删除失败：{exc}")
             finally:

@@ -15,7 +15,10 @@ export const BackupList: React.FC<BackupListProps> = ({
   onRestore,
   onDelete,
 }) => {
-  const isBusy = operationState === 'backing-up' || operationState === 'restoring';
+  const isBusy =
+    operationState === 'backing-up' ||
+    operationState === 'restoring' ||
+    operationState === 'deleting';
 
   return (
     <div className="space-y-2.5">

@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BackupItem, LogEntry, OperationState, SystemInfo } from './types';
+import { BackupItem, LogEntry, OperationState, OperationType, SystemInfo } from './types';
 import { WindowHeader } from './components/WindowHeader';
 import { StatusBanner } from './components/StatusBanner';
 import { ActionBar } from './components/ActionBar';
@@ -52,7 +52,7 @@ export default function App() {
   });
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [operationState, setOperationState] = useState<OperationState>('idle');
-  const [operationType, setOperationType] = useState<'backup' | 'restore'>('backup');
+  const [operationType, setOperationType] = useState<OperationType>('backup');
   const [progressPercent, setProgressPercent] = useState(0);
   const [statusMessage, setStatusMessage] = useState('就绪');
   const [elapsedTime, setElapsedTime] = useState('');
@@ -144,8 +144,8 @@ export default function App() {
           } else if (kind === 'op') {
             const state = (ev.state as OperationState) || 'idle';
             setOperationState(state);
-            if (ev.op === 'restore' || ev.op === 'backup') {
-              setOperationType(ev.op);
+            if (ev.op === 'restore' || ev.op === 'backup' || ev.op === 'delete') {
+              setOperationType(ev.op as OperationType);
             }
             if (typeof ev.percent === 'number') {
               setProgressPercent(ev.percent);
@@ -177,8 +177,13 @@ export default function App() {
     };
   }, [apiReady, addLog, showToast]);
 
+  const isOpBusy =
+    operationState === 'backing-up' ||
+    operationState === 'restoring' ||
+    operationState === 'deleting';
+
   const handleBackupAll = async () => {
-    if (operationState === 'backing-up' || operationState === 'restoring') return;
+    if (isOpBusy) return;
     const api = getApi();
     if (!api) {
       showToast('请用桌面程序启动后再备份');
@@ -228,6 +233,8 @@ export default function App() {
       showToast('请用桌面程序启动后再删除');
       return;
     }
+    setOperationType('delete');
+    setElapsedTime('');
     const res = await api.delete_backup(path);
     if (!res.ok) showToast(res.error || '删除失败');
   };

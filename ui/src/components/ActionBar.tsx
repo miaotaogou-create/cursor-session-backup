@@ -17,7 +17,10 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   onRefresh,
   isRefreshing,
 }) => {
-  const isBusy = operationState === 'backing-up' || operationState === 'restoring';
+  const isBusy =
+    operationState === 'backing-up' ||
+    operationState === 'restoring' ||
+    operationState === 'deleting';
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
