@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackupItem, LogEntry, OperationState, OperationType, SystemInfo } from './types';
 import { WindowHeader } from './components/WindowHeader';
+import { WindowResizeEdges } from './components/WindowResizeEdges';
 import { StatusBanner } from './components/StatusBanner';
 import { ActionBar } from './components/ActionBar';
 import { BackupList } from './components/BackupList';
@@ -261,6 +262,8 @@ export default function App() {
           <span>{toastMessage}</span>
         </div>
       )}
+
+      <WindowResizeEdges disabled={isMaximized} />
 
       <WindowHeader
         version={appVersion}

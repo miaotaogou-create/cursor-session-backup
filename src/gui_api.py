@@ -163,6 +163,27 @@ class DesktopApi:
 
     def window_begin_drag(self) -> None:
         """用 Win32 HTCAPTION 原生拖窗，避免 pywebview JS 拖拽在缩放下光标错位抖动。"""
+        self._win32_nc_action(2)  # HTCAPTION
+
+    def window_begin_resize(self, edge: str) -> None:
+        """无边框窗用 Win32 HT* 拖边缩放。edge: n/s/e/w/ne/nw/se/sw"""
+        if self._maximized:
+            return
+        hit = {
+            "w": 10,   # HTLEFT
+            "e": 11,   # HTRIGHT
+            "n": 12,   # HTTOP
+            "nw": 13,  # HTTOPLEFT
+            "ne": 14,  # HTTOPRIGHT
+            "s": 15,   # HTBOTTOM
+            "sw": 16,  # HTBOTTOMLEFT
+            "se": 17,  # HTBOTTOMRIGHT
+        }.get(str(edge).lower())
+        if hit is None:
+            return
+        self._win32_nc_action(hit)
+
+    def _win32_nc_action(self, hit_test: int) -> None:
         if self._window is None:
             return
         try:
@@ -175,14 +196,14 @@ class DesktopApi:
             if form is None:
                 return
 
-            def _drag() -> None:
+            def _act() -> None:
                 handle = form.Handle
                 hwnd = int(handle.ToInt64()) if hasattr(handle, "ToInt64") else int(handle.ToInt32())
                 ctypes.windll.user32.ReleaseCapture()
-                # WM_NCLBUTTONDOWN + HTCAPTION：系统原生拖动，光标不跳
-                ctypes.windll.user32.SendMessageW(hwnd, 0x00A1, 2, 0)
+                # WM_NCLBUTTONDOWN + HT*：系统原生拖动/缩放
+                ctypes.windll.user32.SendMessageW(hwnd, 0x00A1, int(hit_test), 0)
 
-            form.Invoke(Func[Type](_drag))
+            form.Invoke(Func[Type](_act))
         except Exception:
             pass
 

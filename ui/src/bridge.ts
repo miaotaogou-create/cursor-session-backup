@@ -46,6 +46,7 @@ type DesktopApi = {
   window_toggle_maximize: () => Promise<{ ok: boolean; maximized: boolean }>;
   window_is_maximized: () => Promise<boolean>;
   window_begin_drag: () => Promise<void>;
+  window_begin_resize: (edge: string) => Promise<void>;
   window_close: () => Promise<void>;
 };
 
