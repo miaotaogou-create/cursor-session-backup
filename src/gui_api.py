@@ -161,6 +161,31 @@ class DesktopApi:
         if self._window is not None:
             self._window.destroy()
 
+    def window_begin_drag(self) -> None:
+        """用 Win32 HTCAPTION 原生拖窗，避免 pywebview JS 拖拽在缩放下光标错位抖动。"""
+        if self._window is None:
+            return
+        try:
+            import ctypes
+
+            from System import Func, Type
+            from webview.platforms.winforms import BrowserView
+
+            form = BrowserView.instances.get(self._window.uid)
+            if form is None:
+                return
+
+            def _drag() -> None:
+                handle = form.Handle
+                hwnd = int(handle.ToInt64()) if hasattr(handle, "ToInt64") else int(handle.ToInt32())
+                ctypes.windll.user32.ReleaseCapture()
+                # WM_NCLBUTTONDOWN + HTCAPTION：系统原生拖动，光标不跳
+                ctypes.windll.user32.SendMessageW(hwnd, 0x00A1, 2, 0)
+
+            form.Invoke(Func[Type](_drag))
+        except Exception:
+            pass
+
     # —— 路径 / 文件夹 ——
     def open_backup_folder(self) -> dict[str, Any]:
         path = self.backup_root
