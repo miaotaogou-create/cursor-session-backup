@@ -1,24 +1,42 @@
-"""文件/目录拷贝（Windows 优先 robocopy）。"""
+"""文件/目录拷贝（Windows 优先 robocopy），支持进度上报。"""
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
-ProgressFn = Callable[[str], None]
+from .sizing import dir_size_bytes, format_bytes
+
+# message, fraction(0..1 或 None 表示仅更新文案)
+ProgressFn = Callable[[str, float | None], None]
+
+_CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
 
 
-def _log(progress: ProgressFn | None, message: str) -> None:
+def emit(progress: ProgressFn | None, message: str, fraction: float | None = None) -> None:
     if progress:
-        progress(message)
+        progress(message, fraction)
 
 
-def copy_file(src: Path, dst: Path, progress: ProgressFn | None = None) -> None:
+def copy_file(
+    src: Path,
+    dst: Path,
+    progress: ProgressFn | None = None,
+    *,
+    progress_span: tuple[float, float] | None = None,
+) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
-    _log(progress, f"复制文件: {src} -> {dst}")
+    start, end = progress_span or (None, None)
+    if start is not None and end is not None:
+        emit(progress, f"复制文件: {src.name}", start)
+    else:
+        emit(progress, f"复制文件: {src} -> {dst}")
     shutil.copy2(src, dst)
+    if start is not None and end is not None:
+        emit(progress, f"已复制: {src.name}", end)
 
 
 def copy_tree(
@@ -27,6 +45,8 @@ def copy_tree(
     *,
     exclude_files: list[str] | None = None,
     progress: ProgressFn | None = None,
+    progress_span: tuple[float, float] | None = None,
+    expected_bytes: int | None = None,
 ) -> None:
     """复制目录树。exclude_files 为文件名列表（仅文件名，非路径）。"""
     if not src.exists():
@@ -35,11 +55,25 @@ def copy_tree(
     excludes = exclude_files or []
 
     if shutil.which("robocopy"):
-        _robocopy(src, dst, excludes=excludes, progress=progress)
+        _robocopy(
+            src,
+            dst,
+            excludes=excludes,
+            progress=progress,
+            progress_span=progress_span,
+            expected_bytes=expected_bytes,
+        )
         return
 
-    _log(progress, f"robocopy 不可用，改用 shutil 复制: {src}")
-    _shutil_copytree(src, dst, excludes=set(excludes), progress=progress)
+    emit(progress, f"robocopy 不可用，改用 shutil 复制: {src}")
+    _shutil_copytree(
+        src,
+        dst,
+        excludes=set(excludes),
+        progress=progress,
+        progress_span=progress_span,
+        expected_bytes=expected_bytes,
+    )
 
 
 def _robocopy(
@@ -48,6 +82,8 @@ def _robocopy(
     *,
     excludes: list[str],
     progress: ProgressFn | None,
+    progress_span: tuple[float, float] | None,
+    expected_bytes: int | None,
 ) -> None:
     cmd = [
         "robocopy",
@@ -68,22 +104,48 @@ def _robocopy(
     if excludes:
         cmd.append("/XF")
         cmd.extend(excludes)
-    _log(progress, f"robocopy: {src} -> {dst}" + (f"（排除 {', '.join(excludes)}）" if excludes else ""))
-    completed = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+
+    start, end = progress_span or (0.0, 1.0)
+    label = src.name
+    emit(
+        progress,
+        f"正在复制 {label}"
+        + (f"（约 {format_bytes(expected_bytes)}）" if expected_bytes else "")
+        + (f"；排除 {', '.join(excludes)}" if excludes else ""),
+        start,
     )
-    # robocopy: 0–7 成功，>=8 失败
-    if completed.returncode >= 8:
-        detail = (completed.stdout or "") + (completed.stderr or "")
-        raise RuntimeError(
-            f"robocopy 失败 exit={completed.returncode}\n源: {src}\n目标: {dst}\n{detail.strip()}"
-        )
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=_CREATE_NO_WINDOW,
+    )
+
+    stop = threading.Event()
+
+    def poller() -> None:
+        # ponytail: 用目标目录体积近似进度；robocopy 结束后会 snap 到 end
+        while not stop.wait(0.35):
+            if expected_bytes and expected_bytes > 0 and progress_span is not None:
+                done = dir_size_bytes(dst)
+                ratio = min(0.99, done / float(expected_bytes))
+                frac = start + (end - start) * ratio
+                emit(progress, f"正在复制 {label}… {format_bytes(done)} / {format_bytes(expected_bytes)}", frac)
+            elif progress_span is not None:
+                emit(progress, f"正在复制 {label}…", None)
+
+    t = threading.Thread(target=poller, daemon=True)
+    t.start()
+    try:
+        code = proc.wait()
+    finally:
+        stop.set()
+        t.join(timeout=1.0)
+
+    if code >= 8:
+        raise RuntimeError(f"robocopy 失败 exit={code}\n源: {src}\n目标: {dst}")
+    emit(progress, f"已完成: {label}", end)
 
 
 def _shutil_copytree(
@@ -92,11 +154,16 @@ def _shutil_copytree(
     *,
     excludes: set[str],
     progress: ProgressFn | None,
+    progress_span: tuple[float, float] | None,
+    expected_bytes: int | None,
 ) -> None:
+    start, end = progress_span or (0.0, 1.0)
+    copied = 0
+    files = [p for p in src.rglob("*") if p.is_file() and p.name not in excludes]
+    total = expected_bytes or sum(p.stat().st_size for p in files) or 1
     for path in src.rglob("*"):
         rel = path.relative_to(src)
         if path.is_file() and path.name in excludes:
-            _log(progress, f"跳过: {rel}")
             continue
         target = dst / rel
         if path.is_dir():
@@ -104,6 +171,12 @@ def _shutil_copytree(
         elif path.is_file():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
+            try:
+                copied += path.stat().st_size
+            except OSError:
+                pass
+            frac = start + (end - start) * min(1.0, copied / float(total))
+            emit(progress, f"复制 {rel}", frac)
 
 
 def move_aside(path: Path, stamp: str, progress: ProgressFn | None = None) -> Path | None:
@@ -112,11 +185,10 @@ def move_aside(path: Path, stamp: str, progress: ProgressFn | None = None) -> Pa
         return None
     parent = path.parent
     aside = parent / f"OLD_{stamp}_{path.name}"
-    # 极少情况下重名，再加序号
     n = 1
     while aside.exists():
         aside = parent / f"OLD_{stamp}_{path.name}_{n}"
         n += 1
-    _log(progress, f"挪走现有数据以回退: {path} -> {aside}")
+    emit(progress, f"挪走现有数据以回退: {path.name}")
     path.rename(aside)
     return aside

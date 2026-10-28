@@ -163,6 +163,44 @@ class SessionBackupApp(ctk.CTk):
         )
         self.list_host.pack(fill="both", expand=True, padx=18, pady=(0, 8))
 
+        self.progress_wrap = ctk.CTkFrame(
+            self, fg_color=CARD, corner_radius=12, border_width=1, border_color="#E2E8F0"
+        )
+        self.progress_wrap.pack(fill="x", padx=24, pady=(0, 8))
+        prog_head = ctk.CTkFrame(self.progress_wrap, fg_color="transparent")
+        prog_head.pack(fill="x", padx=14, pady=(10, 0))
+        self.progress_title = ctk.CTkLabel(
+            prog_head,
+            text="进度",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color=MUTED,
+        )
+        self.progress_title.pack(side="left")
+        self.progress_pct = ctk.CTkLabel(
+            prog_head,
+            text="待命",
+            font=ctk.CTkFont(family="Segoe UI Semibold", size=12),
+            text_color=TEXT,
+        )
+        self.progress_pct.pack(side="right")
+        self.progress_bar = ctk.CTkProgressBar(
+            self.progress_wrap,
+            height=12,
+            corner_radius=6,
+            progress_color=ACCENT,
+            fg_color="#E2E8F0",
+        )
+        self.progress_bar.pack(fill="x", padx=14, pady=(8, 4))
+        self.progress_bar.set(0)
+        self.progress_detail = ctk.CTkLabel(
+            self.progress_wrap,
+            text="空闲",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color=MUTED,
+            anchor="w",
+        )
+        self.progress_detail.pack(fill="x", padx=14, pady=(0, 10))
+
         log_wrap = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12, border_width=1, border_color="#E2E8F0")
         log_wrap.pack(fill="x", padx=24, pady=(0, 20))
         ctk.CTkLabel(
@@ -173,7 +211,7 @@ class SessionBackupApp(ctk.CTk):
         ).pack(anchor="w", padx=14, pady=(10, 0))
         self.log = ctk.CTkTextbox(
             log_wrap,
-            height=110,
+            height=90,
             font=ctk.CTkFont(family="Consolas", size=12),
             fg_color=CARD,
             text_color=TEXT,
@@ -187,6 +225,40 @@ class SessionBackupApp(ctk.CTk):
 
     def _busy(self) -> bool:
         return self._worker is not None and self._worker.is_alive()
+
+    def _set_progress(self, message: str, fraction: float | None = None) -> None:
+        self.progress_detail.configure(text=message)
+        if fraction is None:
+            return
+        frac = max(0.0, min(1.0, float(fraction)))
+        self.progress_bar.set(frac)
+        self.progress_pct.configure(text=f"{int(round(frac * 100))}%")
+
+    def _reset_progress(self, title: str = "进度") -> None:
+        self.progress_title.configure(text=title)
+        self.progress_bar.set(0)
+        self.progress_pct.configure(text="0%")
+        self.progress_detail.configure(text="准备中…")
+
+    def _finish_progress(self, ok: bool, message: str) -> None:
+        self.progress_bar.set(1.0 if ok else self.progress_bar.get())
+        self.progress_pct.configure(text="完成" if ok else "失败")
+        self.progress_detail.configure(text=message)
+
+    def _make_progress_cb(self):
+        def progress(msg: str, fraction: float | None = None) -> None:
+            self.after(0, lambda m=msg, f=fraction: self._on_progress(m, f))
+
+        return progress
+
+    def _on_progress(self, msg: str, fraction: float | None) -> None:
+        self._set_progress(msg, fraction)
+        # 日志只记关键节点，避免刷屏
+        if fraction is None or fraction in (0.0, 1.0) or "完成" in msg or "失败" in msg:
+            self._log(msg)
+        elif fraction is not None and abs(fraction - getattr(self, "_last_logged_frac", -1)) >= 0.08:
+            self._last_logged_frac = fraction
+            self._log(msg)
 
     def _refresh_all(self) -> None:
         self.refresh_status()
@@ -351,10 +423,10 @@ class SessionBackupApp(ctk.CTk):
             parent=self,
         ):
             return
+        self._last_logged_frac = -1.0
+        self._reset_progress("备份进度")
         self._log("—— 开始备份 ——")
-
-        def progress(msg: str) -> None:
-            self.after(0, lambda m=msg: self._log(m))
+        progress = self._make_progress_cb()
 
         def work() -> None:
             try:
@@ -372,10 +444,12 @@ class SessionBackupApp(ctk.CTk):
         self.refresh_status()
         self.refresh_list()
         if error:
+            self._finish_progress(False, "备份失败")
             self._log("备份失败:\n" + "".join(traceback.format_exception_only(type(error), error)))
             messagebox.showerror("备份失败", str(error), parent=self)
             return
         assert backup_dir is not None
+        self._finish_progress(True, f"备份成功：{backup_dir.name}")
         self._log(f"备份成功: {backup_dir}")
         messagebox.showinfo("备份成功", f"已保存：\n{backup_dir}", parent=self)
 
@@ -399,27 +473,27 @@ class SessionBackupApp(ctk.CTk):
             msg = "检测到 Cursor 正在运行。\n\n" + msg
         if not messagebox.askyesno("一键恢复", msg, parent=self):
             return
+        self._last_logged_frac = -1.0
+        self._reset_progress("恢复进度")
         self._log("—— 开始恢复 ——")
         opts = _default_restore(path)
-
-        def progress(m: str) -> None:
-            self.after(0, lambda x=m: self._log(x))
+        progress = self._make_progress_cb()
 
         def work() -> None:
             try:
                 if cursor_is_running():
-                    progress("正在关闭 Cursor…")
+                    progress("正在关闭 Cursor…", 0.01)
                     left = close_cursor_processes()
                     if left:
                         detail = ", ".join(f"{h.name}:{h.pid}" for h in left)
                         raise RuntimeError(f"无法关闭 Cursor：{detail}")
-                    progress("Cursor 已退出")
+                    progress("Cursor 已退出", 0.05)
                 result = run_restore(self.paths, opts, progress=progress)
                 try:
                     launched = launch_cursor()
-                    progress(f"已重新启动 Cursor：{launched}")
+                    progress(f"已重新启动 Cursor：{launched}", 1.0)
                 except Exception as launch_exc:  # noqa: BLE001
-                    progress(f"恢复成功，但自动启动失败：{launch_exc}")
+                    progress(f"恢复成功，但自动启动失败：{launch_exc}", 1.0)
                 self.after(0, lambda: self._restore_done(result, None))
             except Exception as exc:  # noqa: BLE001
                 self.after(0, lambda: self._restore_done(None, exc))
@@ -430,9 +504,11 @@ class SessionBackupApp(ctk.CTk):
     def _restore_done(self, result, error: BaseException | None) -> None:
         self.refresh_status()
         if error:
+            self._finish_progress(False, "恢复失败")
             self._log("恢复失败:\n" + "".join(traceback.format_exception_only(type(error), error)))
             messagebox.showerror("恢复失败", str(error), parent=self)
             return
+        self._finish_progress(True, "恢复完成")
         aside = "\n".join(result.aside_paths[:6]) if result.aside_paths else "(无)"
         messagebox.showinfo(
             "恢复成功",
@@ -453,12 +529,30 @@ class SessionBackupApp(ctk.CTk):
             parent=self,
         ):
             return
-        try:
-            delete_backup_dir(path)
-            self._log(f"已删除：{path}")
-            self.refresh_list()
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("删除失败", str(exc), parent=self)
+        self._last_logged_frac = -1.0
+        self._reset_progress("删除进度")
+        self._log(f"—— 开始删除 {path.name} ——")
+        progress = self._make_progress_cb()
+
+        def work() -> None:
+            try:
+                delete_backup_dir(path, progress=progress)
+                self.after(0, lambda: self._delete_done(path, None))
+            except Exception as exc:  # noqa: BLE001
+                self.after(0, lambda: self._delete_done(path, exc))
+
+        self._worker = threading.Thread(target=work, daemon=True)
+        self._worker.start()
+
+    def _delete_done(self, path: Path, error: BaseException | None) -> None:
+        if error:
+            self._finish_progress(False, "删除失败")
+            self._log("删除失败:\n" + "".join(traceback.format_exception_only(type(error), error)))
+            messagebox.showerror("删除失败", str(error), parent=self)
+            return
+        self._finish_progress(True, f"已删除：{path.name}")
+        self._log(f"已删除：{path}")
+        self.refresh_list()
 
 
 def main() -> None:

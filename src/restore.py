@@ -9,7 +9,8 @@ from pathlib import Path
 from .backup_layout import STATE_DB, backup_has_state_db, resolve_backup_layout
 from .paths import CursorPaths
 from .process_check import cursor_is_running, list_cursor_processes
-from .transfer import ProgressFn, copy_file, copy_tree, move_aside
+from .sizing import dir_size_bytes
+from .transfer import ProgressFn, copy_file, copy_tree, emit, move_aside
 
 
 @dataclass
@@ -65,12 +66,8 @@ def run_restore(
     stamp = now.strftime("%Y%m%d_%H%M%S")
     result = RestoreResult()
 
-    def log(msg: str) -> None:
-        if progress:
-            progress(msg)
-
     if layout.legacy:
-        log("检测到旧版备份目录结构，按兼容路径恢复")
+        emit(progress, "检测到旧版备份目录结构，按兼容路径恢复", 0.02)
 
     pairs: list[tuple[str, Path | None, Path, bool]] = [
         ("globalStorage", layout.global_storage, paths.global_storage, False),
@@ -85,23 +82,54 @@ def run_restore(
         rules_dst = options.rules_dir or paths.rules_dir
         pairs.append(("ZYL_dot_cursor", layout.rules_dir, rules_dst, False))
 
-    for label, src, dst, is_file in pairs:
-        if src is None or not src.exists():
-            result.warnings.append(f"备份中无此项，跳过: {label}")
-            log(result.warnings[-1])
-            continue
+    present = [(label, src, dst, is_file) for label, src, dst, is_file in pairs if src is not None and src.exists()]
+    weights: list[int] = []
+    for _label, src, _dst, is_file in present:
+        assert src is not None
+        if is_file:
+            try:
+                weights.append(max(src.stat().st_size, 1))
+            except OSError:
+                weights.append(1)
+        else:
+            weights.append(max(dir_size_bytes(src), 1024))
+    total_w = float(sum(weights)) or 1.0
+    cursor = 0.0
+    emit(progress, "开始恢复…", 0.0)
+
+    for (label, src, dst, is_file), weight in zip(present, weights, strict=True):
+        assert src is not None
+        # 挪走旧数据约占本段前 5%
+        span_lo = cursor / total_w
+        span_hi = (cursor + weight) / total_w
+        aside_hi = span_lo + (span_hi - span_lo) * 0.05
+        emit(progress, f"准备恢复 {label}", span_lo)
         aside = move_aside(dst, stamp, progress=progress)
         if aside is not None:
             result.aside_paths.append(str(aside))
+        emit(progress, f"写入 {label}", aside_hi)
         if is_file:
-            copy_file(src, dst, progress=progress)
+            copy_file(src, dst, progress=progress, progress_span=(aside_hi, span_hi))
         else:
-            copy_tree(src, dst, progress=progress)
+            copy_tree(
+                src,
+                dst,
+                progress=progress,
+                progress_span=(aside_hi, span_hi),
+                expected_bytes=weight,
+            )
         result.restored.append(label)
-        log(f"已恢复: {label} -> {dst}")
+        emit(progress, f"已恢复: {label}", span_hi)
+        cursor += weight
+
+    for label, src, _dst, _is_file in pairs:
+        if src is not None and src.exists():
+            continue
+        result.warnings.append(f"备份中无此项，跳过: {label}")
+        emit(progress, result.warnings[-1])
 
     if "globalStorage" not in result.restored:
         raise RuntimeError("恢复失败：未能恢复 globalStorage")
 
-    log("恢复完成。请重新打开 Cursor，并用备份时相同的工程路径打开项目。")
+    emit(progress, "恢复完成。请用备份时相同的工程路径打开项目。", 1.0)
     return result

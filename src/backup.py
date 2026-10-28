@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .paths import CursorPaths, new_backup_dir_name
 from .sizing import dir_size_bytes, format_bytes
-from .transfer import ProgressFn, copy_file, copy_tree
+from .transfer import ProgressFn, copy_file, copy_tree, emit
 
 STATE_DB = "state.vscdb"
 STATE_DB_BACKUP = "state.vscdb.backup"
@@ -142,34 +142,46 @@ def run_backup(
         raise RuntimeError(f"备份目录已存在: {backup_dir}")
     backup_dir.mkdir(parents=True, exist_ok=False)
 
-    def log(msg: str) -> None:
-        if progress:
-            progress(msg)
-
     result = BackupResult(backup_dir=backup_dir)
     exclude_gs = [] if options.include_state_vscdb_backup else [STATE_DB_BACKUP]
 
-    for item in plan:
-        if not item.src.exists():
-            msg = f"跳过不存在: {item.src}"
-            if item.required:
-                result.warnings.append(f"必需项缺失: {item.src}")
-            else:
-                result.warnings.append(msg)
-            log(msg)
-            continue
+    existing = [i for i in plan if i.src.exists()]
+    weights = [max(i.estimated_bytes, 1 if i.is_file else 1024) for i in existing]
+    total_w = float(sum(weights)) or 1.0
+    cursor = 0.0
+    emit(progress, "开始备份…", 0.0)
+
+    for item, weight in zip(existing, weights, strict=True):
+        span = (cursor / total_w, (cursor + weight) / total_w)
         dest = backup_dir / item.dest_name
         try:
             if item.is_file:
-                copy_file(item.src, dest, progress=progress)
+                copy_file(item.src, dest, progress=progress, progress_span=span)
             else:
                 excludes = exclude_gs if item.key == "globalStorage" else None
-                copy_tree(item.src, dest, exclude_files=excludes, progress=progress)
+                copy_tree(
+                    item.src,
+                    dest,
+                    exclude_files=excludes,
+                    progress=progress,
+                    progress_span=span,
+                    expected_bytes=item.estimated_bytes or None,
+                )
             result.items.append(item.dest_name)
-            log(f"完成: {item.label}")
+            emit(progress, f"完成: {item.label}", span[1])
         except OSError as exc:
-            # 文件被锁等
             raise RuntimeError(f"复制失败（可能被 Cursor 占用）: {item.src}\n{exc}") from exc
+        cursor += weight
+
+    for item in plan:
+        if item.src.exists():
+            continue
+        msg = f"跳过不存在: {item.src}"
+        if item.required:
+            result.warnings.append(f"必需项缺失: {item.src}")
+        else:
+            result.warnings.append(msg)
+        emit(progress, msg)
 
     # 再确认备份里有 state.vscdb
     backed_state = backup_dir / "globalStorage" / STATE_DB
@@ -181,12 +193,12 @@ def run_backup(
         if bad.exists():
             raise RuntimeError("备份校验失败：不应包含 state.vscdb.backup，但文件已出现")
 
+    emit(progress, "写入说明与清单…", 0.98)
     result.total_bytes = dir_size_bytes(backup_dir)
     _write_readme(backup_dir, paths, options, result, now)
     _write_manifest(backup_dir, paths, options, result, now)
-    log(f"备份完成: {backup_dir}（{format_bytes(result.total_bytes)}）")
+    emit(progress, f"备份完成: {backup_dir}（{format_bytes(result.total_bytes)}）", 1.0)
     return result
-
 
 def _write_readme(
     backup_dir: Path,

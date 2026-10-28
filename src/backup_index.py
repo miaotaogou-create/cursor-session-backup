@@ -110,22 +110,56 @@ def _clear_readonly(func, path, _exc_info) -> None:
         raise
 
 
-def delete_backup_dir(path: Path) -> None:
+def delete_backup_dir(path: Path, progress=None) -> None:
+    from .transfer import emit
+
     if not path.is_dir():
         raise FileNotFoundError(str(path))
     if not path.name.startswith("cursor-sessions_"):
         raise RuntimeError(f"拒绝删除非本工具备份目录: {path}")
 
-    # 先批量清只读，再 rmtree
-    for root, _dirs, files in os.walk(path):
-        for name in files:
-            fp = Path(root) / name
-            try:
-                if fp.exists() and not os.access(fp, os.W_OK):
-                    os.chmod(fp, stat.S_IWRITE)
-            except OSError:
-                continue
+    emit(progress, "正在扫描备份文件…", 0.0)
+    files: list[Path] = []
+    dirs: list[Path] = []
+    for root, dirnames, filenames in os.walk(path, topdown=False):
+        root_p = Path(root)
+        for name in filenames:
+            files.append(root_p / name)
+        for name in dirnames:
+            dirs.append(root_p / name)
+    dirs.append(path)
+    total = max(len(files) + len(dirs), 1)
+    done = 0
 
-    shutil.rmtree(path, onerror=_clear_readonly)
+    for fp in files:
+        try:
+            if fp.exists() and not os.access(fp, os.W_OK):
+                os.chmod(fp, stat.S_IWRITE)
+            fp.unlink(missing_ok=True)
+        except OSError:
+            try:
+                os.chmod(fp, stat.S_IWRITE)
+                fp.unlink(missing_ok=True)
+            except OSError as exc:
+                raise RuntimeError(f"无法删除文件: {fp}\n{exc}") from exc
+        done += 1
+        if done % 25 == 0 or done == len(files):
+            emit(progress, f"正在删除文件… {done}/{len(files)}", done / total)
+
+    for dp in dirs:
+        try:
+            if dp.exists():
+                dp.rmdir()
+        except OSError:
+            try:
+                shutil.rmtree(dp, onerror=_clear_readonly)
+            except OSError as exc:
+                raise RuntimeError(f"无法删除目录: {dp}\n{exc}") from exc
+        done += 1
+        emit(progress, f"正在清理目录…", min(0.99, done / total))
+
+    if path.exists():
+        shutil.rmtree(path, onerror=_clear_readonly)
     if path.exists():
         raise RuntimeError(f"删除未完成，目录仍在: {path}")
+    emit(progress, "删除完成", 1.0)
