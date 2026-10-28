@@ -1,0 +1,33 @@
+"""界面主题色与字体约定。"""
+
+from __future__ import annotations
+
+# 主色 Teal
+TEAL_700 = "#0F766E"
+TEAL_800 = "#115E59"
+TEAL_600 = "#0D9488"
+TEAL_50 = "#F0FDFA"
+
+# 中性
+SLATE_50 = "#F8FAFC"
+SLATE_100 = "#F1F5F9"
+SLATE_200 = "#E2E8F0"
+SLATE_300 = "#CBD5E1"
+SLATE_500 = "#64748B"
+SLATE_700 = "#334155"
+SLATE_800 = "#1E293B"
+SLATE_900 = "#0F172A"
+SLATE_950 = "#020617"
+WHITE = "#FFFFFF"
+
+# 语义色
+ROSE_50 = "#FFF1F2"
+ROSE_600 = "#E11D48"
+EMERALD_500 = "#10B981"
+EMERALD_600 = "#059669"
+AMBER_400 = "#FBBF24"
+SKY_400 = "#38BDF8"
+
+FONT_UI = "Segoe UI"
+FONT_UI_BOLD = "Segoe UI Semibold"
+FONT_MONO = "Consolas"

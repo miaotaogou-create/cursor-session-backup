@@ -10,4 +10,6 @@
 | `transfer.py` | robocopy / 文件拷贝与 OLD_* 挪移 |
 | `backup.py` | 备份计划与执行 |
 | `restore.py` | 恢复校验与执行 |
-| `gui_app.py` | tkinter 界面 |
+| `gui_theme.py` | 配色与字体 |
+| `gui_widgets.py` | 标题栏 / 路径卡 / 备份卡 / 进度 / 日志组件 |
+| `gui_app.py` | 主窗口编排与业务接线 |
