@@ -1,8 +1,9 @@
 import React from 'react';
-import { Minus, Square, X, Database, ShieldCheck } from 'lucide-react';
+import { Minus, Square, Copy, X, Database, ShieldCheck } from 'lucide-react';
 
 interface WindowHeaderProps {
   version: string;
+  isMaximized?: boolean;
   onMinimize?: () => void;
   onMaximize?: () => void;
   onClose?: () => void;
@@ -10,6 +11,7 @@ interface WindowHeaderProps {
 
 export const WindowHeader: React.FC<WindowHeaderProps> = ({
   version,
+  isMaximized = false,
   onMinimize,
   onMaximize,
   onClose,
@@ -43,12 +45,12 @@ export const WindowHeader: React.FC<WindowHeaderProps> = ({
         </button>
         <button
           type="button"
-          aria-label="最大化"
+          aria-label={isMaximized ? '还原' : '最大化'}
           className="w-10 h-10 inline-flex items-center justify-center text-teal-200/80 hover:bg-teal-700/60 hover:text-white transition-colors"
-          title="最大化"
+          title={isMaximized ? '还原' : '最大化'}
           onClick={onMaximize}
         >
-          <Square className="w-3 h-3" />
+          {isMaximized ? <Copy className="w-3 h-3" /> : <Square className="w-3 h-3" />}
         </button>
         <button
           type="button"

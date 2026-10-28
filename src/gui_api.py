@@ -78,9 +78,26 @@ class DesktopApi:
         self._busy = False
         self._op_started_at: float | None = None
         self._window = None  # 由启动器注入
+        # pywebview 的 window.maximized 创建后不随窗态更新，需自管
+        self._maximized = False
 
     def bind_window(self, window) -> None:
         self._window = window
+        self._maximized = bool(getattr(window, "maximized", False))
+
+        def _on_maximized() -> None:
+            self._maximized = True
+            self._emit("windowMaximized", maximized=True)
+
+        def _on_restored() -> None:
+            self._maximized = False
+            self._emit("windowMaximized", maximized=False)
+
+        try:
+            window.events.maximized += _on_maximized
+            window.events.restored += _on_restored
+        except Exception:
+            pass
 
     def _emit(self, kind: str, **payload: Any) -> None:
         self._events.put({"kind": kind, **payload})
@@ -126,13 +143,19 @@ class DesktopApi:
         if self._window is not None:
             self._window.minimize()
 
-    def window_toggle_maximize(self) -> None:
+    def window_toggle_maximize(self) -> dict[str, Any]:
         if self._window is None:
-            return
-        if self._window.maximized:
+            return {"ok": False, "maximized": False}
+        if self._maximized:
             self._window.restore()
+            self._maximized = False
         else:
             self._window.maximize()
+            self._maximized = True
+        return {"ok": True, "maximized": self._maximized}
+
+    def window_is_maximized(self) -> bool:
+        return self._maximized
 
     def window_close(self) -> None:
         if self._window is not None:

@@ -65,6 +65,7 @@ export default function App() {
   const [selectedBackup, setSelectedBackup] = useState<BackupItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [apiReady, setApiReady] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -109,6 +110,11 @@ export default function App() {
       try {
         const snap = await api.get_snapshot();
         applySnapshot(snap, setSystemInfo, setBackups, setAppVersion);
+        try {
+          setIsMaximized(Boolean(await api.window_is_maximized()));
+        } catch {
+          /* 旧版桥接无此接口 */
+        }
         addLog('info', '已连接本机备份引擎');
       } catch (e) {
         addLog('error', `读取状态失败: ${e}`);
@@ -157,6 +163,8 @@ export default function App() {
               setBackups,
               setAppVersion,
             );
+          } else if (kind === 'windowMaximized') {
+            setIsMaximized(Boolean(ev.maximized));
           }
         }
       } catch {
@@ -249,8 +257,18 @@ export default function App() {
 
       <WindowHeader
         version={appVersion}
+        isMaximized={isMaximized}
         onMinimize={() => void getApi()?.window_minimize()}
-        onMaximize={() => void getApi()?.window_toggle_maximize()}
+        onMaximize={() => {
+          void (async () => {
+            const api = getApi();
+            if (!api) return;
+            const res = await api.window_toggle_maximize();
+            if (res && typeof res.maximized === 'boolean') {
+              setIsMaximized(res.maximized);
+            }
+          })();
+        }}
         onClose={() => void getApi()?.window_close()}
       />
 
