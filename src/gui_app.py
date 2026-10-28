@@ -17,7 +17,7 @@ from . import gui_theme as T
 from .backup import BackupOptions, build_plan, estimate_total, run_backup
 from .backup_index import BackupEntry, delete_backup_dir, list_backup_entries
 from .cursor_install import find_cursor_install_dir, read_cursor_version
-from .gui_widgets import BackupCard, LogViewer, PathCard, ProgressPanel, TitleBar
+from .gui_widgets import BackupCard, BrandBar, LogViewer, PathCard, ProgressPanel
 from .paths import DEFAULT_BACKUP_ROOT, CursorPaths
 from .process_check import (
     close_cursor_processes,
@@ -66,7 +66,7 @@ class SessionBackupApp(ctk.CTk):
         self.geometry("920x760")
         self.minsize(840, 680)
         self.configure(fg_color=T.SLATE_100)
-        self.overrideredirect(True)
+        # 使用系统原生标题栏（便携 exe 更稳；自定义无边框曾导致递归崩溃）
 
         self.paths = CursorPaths.resolve()
         self.backup_root = DEFAULT_BACKUP_ROOT
@@ -92,11 +92,7 @@ class SessionBackupApp(ctk.CTk):
         )
         shell.pack(fill="both", expand=True, padx=8, pady=8)
 
-        TitleBar(
-            shell,
-            title=f"Cursor 会话备份 v{__version__}",
-            on_close=self.destroy,
-        ).pack(fill="x")
+        BrandBar(shell, title=f"Cursor 会话备份 v{__version__}").pack(fill="x", padx=10, pady=(10, 0))
 
         body = ctk.CTkFrame(shell, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=20, pady=(16, 16))

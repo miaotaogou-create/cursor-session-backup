@@ -21,3 +21,9 @@ release/*.exe
 release/CursorSessionBackup/
 *.zip
 *.7z
+
+ui/node_modules/
+ui/dist/
+*.crash.log
+tcl_probe.txt
+release/*.txt

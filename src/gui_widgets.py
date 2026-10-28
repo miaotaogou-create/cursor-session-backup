@@ -12,15 +12,12 @@ from . import gui_theme as T
 from .backup_index import BackupEntry
 
 
-class TitleBar(ctk.CTkFrame):
-    """深青色自定义标题栏。"""
+class BrandBar(ctk.CTkFrame):
+    """深青色品牌条（不用自定义拖拽/三键，避免无边框窗口递归崩溃；系统标题栏负责窗控）。"""
 
-    def __init__(self, master, title: str, on_close: Callable[[], None]) -> None:
-        super().__init__(master, height=40, fg_color=T.TEAL_800, corner_radius=0)
+    def __init__(self, master, title: str) -> None:
+        super().__init__(master, height=40, fg_color=T.TEAL_800, corner_radius=12)
         self.pack_propagate(False)
-        self._on_close = on_close
-        self._drag_x = 0
-        self._drag_y = 0
 
         left = ctk.CTkFrame(self, fg_color="transparent")
         left.pack(side="left", padx=14)
@@ -39,54 +36,6 @@ class TitleBar(ctk.CTkFrame):
             font=ctk.CTkFont(family=T.FONT_UI, size=11),
             text_color="#CCFBF1",
         ).pack(padx=6, pady=2)
-
-        right = ctk.CTkFrame(self, fg_color="transparent")
-        right.pack(side="right", padx=6)
-        for text, cmd, hover in (
-            ("—", self._minimize, "#0F766E"),
-            ("□", self._toggle_max, "#0F766E"),
-            ("✕", self._close, "#BE123C"),
-        ):
-            btn = ctk.CTkButton(
-                right,
-                text=text,
-                width=36,
-                height=28,
-                corner_radius=6,
-                fg_color="transparent",
-                hover_color=hover,
-                text_color=T.WHITE,
-                font=ctk.CTkFont(size=14),
-                command=cmd,
-            )
-            btn.pack(side="left", padx=2, pady=6)
-
-        for w in (self, left):
-            w.bind("<ButtonPress-1>", self._start_drag)
-            w.bind("<B1-Motion>", self._on_drag)
-
-    def _root(self):
-        return self.winfo_toplevel()
-
-    def _start_drag(self, event) -> None:
-        self._drag_x = event.x_root - self._root().winfo_x()
-        self._drag_y = event.y_root - self._root().winfo_y()
-
-    def _on_drag(self, event) -> None:
-        self._root().geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
-
-    def _minimize(self) -> None:
-        self._root().iconify()
-
-    def _toggle_max(self) -> None:
-        root = self._root()
-        if root.state() == "zoomed":
-            root.state("normal")
-        else:
-            root.state("zoomed")
-
-    def _close(self) -> None:
-        self._on_close()
 
 
 class PathCard(ctk.CTkFrame):

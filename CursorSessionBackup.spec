@@ -1,33 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 便携版：目录模式（onedir），可靠捆绑 Tcl/Tk，避免单文件丢 init.tcl
+# 便携单文件：WebView2 + 内嵌 ui/dist，不再捆绑 tkinter/Tcl。
 
-import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 hidden = collect_submodules("src")
-ctk_datas, ctk_binaries, ctk_hidden = collect_all("customtkinter")
+wv_datas, wv_binaries, wv_hidden = collect_all("webview")
 
-tcl_root = Path(sys.base_prefix) / "tcl"
-extra_datas = []
-if (tcl_root / "tcl8.6").is_dir():
-    extra_datas.append((str(tcl_root / "tcl8.6"), "_tcl_data"))
-if (tcl_root / "tk8.6").is_dir():
-    extra_datas.append((str(tcl_root / "tk8.6"), "_tk_data"))
-if (tcl_root / "tcl8").is_dir():
-    extra_datas.append((str(tcl_root / "tcl8"), "tcl8"))
+ui_dist = Path("ui") / "dist"
+if not (ui_dist / "index.html").is_file():
+    raise SystemExit("缺少 ui/dist：请先在 ui 目录执行 npm run build")
 
 a = Analysis(
     ["run_gui.py"],
     pathex=["."],
-    binaries=ctk_binaries,
-    datas=ctk_datas + extra_datas,
-    hiddenimports=hidden + list(ctk_hidden),
+    binaries=list(wv_binaries),
+    datas=list(wv_datas) + [(str(ui_dist), "ui")],
+    hiddenimports=hidden + list(wv_hidden) + ["clr_loader", "pythonnet"],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=["rthook_tcl_tk.py"],
-    excludes=[],
+    runtime_hooks=[],
+    excludes=["tkinter", "_tkinter", "customtkinter"],
     noarchive=False,
     optimize=0,
 )
@@ -36,27 +30,20 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name="CursorSessionBackup",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name="CursorSessionBackup",
 )

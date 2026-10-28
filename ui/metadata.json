@@ -1,0 +1,6 @@
+{
+  "name": "Cursor 会话备份",
+  "description": "现代精美、直观高效的 Cursor 历史会话备份与一键恢复工具，支持版本监控与实时运行日志。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

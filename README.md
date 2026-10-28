@@ -15,32 +15,41 @@
 
 ## 环境
 
-- Windows 10/11
-- 便携 exe：无需本机 Python
-- 从源码跑：Python 3.10+，`pip install -r requirements.txt`（界面用 customtkinter；拷贝仍用系统 `robocopy` / `tasklist`）
+- Windows 10/11（需已安装 **Microsoft Edge WebView2 运行时**；Win11 一般自带）
+- 便携 exe：无需本机 Python / Node
+- 从源码跑：Python 3.10+，`pip install -r requirements.txt`；界面为 React（`ui/`）经 `pywebview` 承载；拷贝仍用系统 `robocopy` / `tasklist`
 
 ## 便携版（推荐）
 
-已打好的无安装目录（**目录模式**，可靠捆绑 Tcl/Tk，无终端黑框）：
+真正的**单文件 exe**（换电脑也可双击运行，无终端黑框）：
 
-`release\CursorSessionBackup\CursorSessionBackup.exe`
+`release\CursorSessionBackup.exe`
 
-桌面快捷方式或 `启动便携版.bat` 均可启动。
+桌面快捷方式或 `启动便携版.bat` 均可启动。首次启动会稍慢（自解压）。
 
 重新打包：
 
 ```bat
 pip install -r requirements.txt pyinstaller
+npm --prefix ui install
 python build_portable.py
 ```
 
+（`build_portable.py` 会先 `npm run build` 再打 exe。）
+
 ## 开发启动
 
+先构建一次界面，再启动：
+
 ```bat
-run_gui.bat
+npm --prefix ui install
+npm --prefix ui run build
+pythonw run_gui.py
 ```
 
-（优先启动 `release\CursorSessionBackup.exe`；否则用 `pythonw` 以免弹出控制台）
+或直接双击已打好的 `release\CursorSessionBackup.exe`。
+
+仅改 UI 时可 `npm --prefix ui run dev` 在浏览器预览（无桌面桥接时不会真正备份）。
 
 ## 备份包含什么（默认）
 
@@ -54,8 +63,8 @@ run_gui.bat
 
 ## 推荐流程
 
-1. **卸载前**：打开本工具 → 确认备份根目录与选项 →「开始备份」→ 确认生成了 `README-恢复说明.txt` 与 `manifest.json`。
-2. **重装后**：安装 Cursor → 先打开一次再完全退出 → 确认任务管理器无 Cursor 进程 → 本工具选中备份 →「开始恢复」。
+1. **卸载前**：打开本工具 → 确认备份根目录 →「一键备份全部对话」→ 确认生成了说明与元数据。
+2. **重装后**：安装 Cursor → 先打开一次再完全退出 → 确认任务管理器无 Cursor 进程 → 本工具选中备份 →「一键恢复」。
 3. 重新打开 Cursor，用**备份时相同的工程文件夹路径**打开项目。
 
 ## 风险说明
@@ -72,4 +81,4 @@ python tests\test_self_check.py
 
 ## 许可证
 
-MIT（见 [LICENSE](LICENSE)）
+MIT（见 [LICENSE]）

@@ -1,2 +1,2 @@
 @echo off
-start "" "%~dp0CursorSessionBackup\CursorSessionBackup.exe"
+start "" "%~dp0CursorSessionBackup.exe"

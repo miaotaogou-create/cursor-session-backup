@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
-if exist "%~dp0release\CursorSessionBackup\CursorSessionBackup.exe" (
-  start "" "%~dp0release\CursorSessionBackup\CursorSessionBackup.exe"
+if exist "%~dp0release\CursorSessionBackup.exe" (
+  start "" "%~dp0release\CursorSessionBackup.exe"
   exit /b 0
 )
 where pythonw >nul 2>&1

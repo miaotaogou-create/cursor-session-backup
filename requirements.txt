@@ -1,1 +1,5 @@
-customtkinter>=5.2.0
+# 运行时
+pywebview>=5.0
+
+# 打包（可选）
+# pyinstaller>=6.0
