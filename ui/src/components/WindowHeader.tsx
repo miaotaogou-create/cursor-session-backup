@@ -17,23 +17,25 @@ export const WindowHeader: React.FC<WindowHeaderProps> = ({
   onClose,
 }) => {
   return (
-    <header className="pywebview-drag-region h-10 px-4 bg-teal-800 text-teal-100 flex items-center justify-between select-none border-b border-teal-900/40 shrink-0">
-      <div className="flex items-center gap-2.5">
-        <div className="w-5 h-5 rounded-md bg-teal-600/60 flex items-center justify-center text-teal-50 border border-teal-400/30 shadow-inner">
+    <header className="h-10 bg-teal-800 text-teal-100 flex items-center justify-between select-none border-b border-teal-900/40 shrink-0">
+      {/* 仅标题区可拖；窗控必须在 drag-region 外，否则第一次按下会被当成拖窗 */}
+      <div className="pywebview-drag-region flex-1 min-w-0 h-full px-4 flex items-center gap-2.5">
+        <div className="w-5 h-5 rounded-md bg-teal-600/60 flex items-center justify-center text-teal-50 border border-teal-400/30 shadow-inner shrink-0">
           <Database className="w-3.5 h-3.5" />
         </div>
-        <div className="flex items-baseline gap-2">
-          <span className="font-semibold text-xs tracking-wide text-white">Cursor 会话备份</span>
-          <span className="text-[11px] font-mono text-teal-300/80">v{version}</span>
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="font-semibold text-xs tracking-wide text-white truncate">
+            Cursor 会话备份
+          </span>
+          <span className="text-[11px] font-mono text-teal-300/80 shrink-0">v{version}</span>
+        </div>
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-teal-200/70 font-medium ml-auto pr-2">
+          <ShieldCheck className="w-3.5 h-3.5 text-teal-300" />
+          <span>本地安全存储 · 无网络上传</span>
         </div>
       </div>
 
-      <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-teal-200/70 font-medium">
-        <ShieldCheck className="w-3.5 h-3.5 text-teal-300" />
-        <span>本地安全存储 · 无网络上传</span>
-      </div>
-
-      <div className="flex items-center -mr-2">
+      <div className="flex items-center h-full shrink-0">
         <button
           type="button"
           aria-label="最小化"
